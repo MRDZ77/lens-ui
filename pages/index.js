@@ -1,4 +1,4 @@
-“use client”;
+
 import { useState, useEffect, useRef, useCallback } from “react”;
 
 const API_URL = “https://lens-api-qu0x.onrender.com/api/prices”;
