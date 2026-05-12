@@ -101,26 +101,19 @@ function computeParams(topId: string, botId: string) {
   const sTop = STRENGTH[topId as keyof typeof STRENGTH] ?? 0.5;
   const sBot = STRENGTH[botId as keyof typeof STRENGTH] ?? 0.5;
   const total = sTop + sBot;
-
-  // Mismo activo vs mismo activo — líneas casi pegadas al centro
   const isSame = topId === botId;
   const maxDisp = isSame ? 0.004 : 0.11;
-
   const weaknessTop = 1 - sTop / total;
   const weaknessBot = 1 - sBot / total;
-
-  const topAmp = isSame
-    ? 0.003
-    : (VOLATILITY[topId as keyof typeof VOLATILITY] ?? 0.03);
-  const botAmp = isSame
-    ? 0.003
-    : (VOLATILITY[botId as keyof typeof VOLATILITY] ?? 0.03);
-
   return {
     topBias: weaknessTop * maxDisp,
     botBias: -weaknessBot * maxDisp,
-    topAmp,
-    botAmp,
+    topAmp: isSame
+      ? 0.003
+      : (VOLATILITY[topId as keyof typeof VOLATILITY] ?? 0.03),
+    botAmp: isSame
+      ? 0.003
+      : (VOLATILITY[botId as keyof typeof VOLATILITY] ?? 0.03),
   };
 }
 
@@ -155,10 +148,9 @@ function TensionChart({
     }
     const from = dataRef.current;
     transRef.current = { active: true, from, to: next, alpha: 0 };
-    const dur = 800;
     const start = performance.now();
     function fade(now: number) {
-      const t = Math.min((now - start) / dur, 1);
+      const t = Math.min((now - start) / 800, 1);
       const ease = t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
       transRef.current.alpha = ease;
       if (t < 1) requestAnimationFrame(fade);
@@ -175,12 +167,9 @@ function TensionChart({
     if (!canvas) return;
     const ctx = canvas.getContext("2d")!;
     const dpr = window.devicePixelRatio || 1;
-    const W = canvas.offsetWidth;
-    const H = canvas.offsetHeight;
-    canvas.width = W * dpr;
-    canvas.height = H * dpr;
+    canvas.width = canvas.offsetWidth * dpr;
+    canvas.height = canvas.offsetHeight * dpr;
     ctx.scale(dpr, dpr);
-
     if (!dataRef.current)
       dataRef.current = initData(topCurrency.id, bottomCurrency.id);
 
@@ -194,7 +183,6 @@ function TensionChart({
         Math.min(d.topBias + d.topAmp * 0.4, t),
       );
       d.top.push(t);
-
       d.bot.shift();
       let b = d.bot[d.bot.length - 1];
       b += (Math.random() - 0.5) * d.botAmp * 0.025;
@@ -218,10 +206,9 @@ function TensionChart({
       const sc = cH * 3.2;
       const toX = (i: number) => (i / (n - 1)) * cW;
       const toY = (v: number) => mid - v * sc;
-
       ctx.globalAlpha = alpha;
 
-      // Cuadrícula ultra tenue
+      // Cuadrícula
       ctx.save();
       ctx.strokeStyle = "rgba(255,255,255,0.025)";
       ctx.lineWidth = 0.5;
@@ -239,7 +226,7 @@ function TensionChart({
       }
       ctx.restore();
 
-      // Línea central visible
+      // Línea central
       ctx.save();
       ctx.strokeStyle = "rgba(255,255,255,0.22)";
       ctx.lineWidth = 0.75;
@@ -251,7 +238,7 @@ function TensionChart({
       ctx.setLineDash([]);
       ctx.restore();
 
-      // Línea TOP = azul, SIN fill/estela
+      // Línea TOP azul sin fill
       ctx.beginPath();
       ctx.moveTo(toX(0), toY(d.top[0]));
       for (let i = 1; i < n; i++) ctx.lineTo(toX(i), toY(d.top[i]));
@@ -260,7 +247,7 @@ function TensionChart({
       ctx.lineJoin = "round";
       ctx.stroke();
 
-      // Línea BOT = morado, CON fill hacia abajo
+      // Línea BOT morado con fill
       const gBot = ctx.createLinearGradient(0, mid, 0, cH);
       gBot.addColorStop(0, "rgba(139,124,255,0.00)");
       gBot.addColorStop(1, "rgba(139,124,255,0.22)");
@@ -271,7 +258,6 @@ function TensionChart({
       ctx.closePath();
       ctx.fillStyle = gBot;
       ctx.fill();
-
       ctx.beginPath();
       ctx.moveTo(toX(0), toY(d.bot[0]));
       for (let j = 1; j < n; j++) ctx.lineTo(toX(j), toY(d.bot[j]));
@@ -280,7 +266,7 @@ function TensionChart({
       ctx.lineJoin = "round";
       ctx.stroke();
 
-      // Pulso en punto más reciente (top)
+      // Pulso
       const pulse = (Math.sin(frameRef.current * 0.07) + 1) / 2;
       const lx = toX(n - 1);
       const ly = toY(d.top[n - 1]);
@@ -293,7 +279,6 @@ function TensionChart({
       ctx.fillStyle = `rgba(100,180,255,${0.12 - pulse * 0.1})`;
       ctx.fill();
 
-      // Hover
       if (hoverRef.current) {
         const hx = hoverRef.current.x;
         const hi = hoverRef.current.index;
@@ -316,7 +301,6 @@ function TensionChart({
         ctx.fill();
         ctx.restore();
       }
-
       ctx.globalAlpha = 1;
     }
 
@@ -353,11 +337,13 @@ function TensionChart({
     const cx = e.touches ? e.touches[0].clientX : e.clientX;
     const x = cx - rect.left;
     const n = dataRef.current.top.length;
-    const index = Math.max(
-      0,
-      Math.min(n - 1, Math.round((x / rect.width) * (n - 1))),
-    );
-    hoverRef.current = { x, index };
+    hoverRef.current = {
+      x,
+      index: Math.max(
+        0,
+        Math.min(n - 1, Math.round((x / rect.width) * (n - 1))),
+      ),
+    };
   }
 
   return (
@@ -419,7 +405,6 @@ function CurrencyPill({
   );
 }
 
-// Barra inferior — cambia la moneda de ABAJO, siempre con bandera/ícono visible
 function CurrencyBar({
   currencies,
   selected,
@@ -585,7 +570,6 @@ export default function LensApp() {
   const [rates, setRates] = useState<any>(DEFAULT_RATES);
   const [live, setLive] = useState(false);
   const [inputValue, setInputValue] = useState("20,000");
-  const touchStartY = useRef<number | null>(null);
 
   const rawAmount = parseFloat(inputValue.replace(/,/g, "")) || 0;
 
@@ -598,7 +582,7 @@ export default function LensApp() {
           setRates(buildRates(data));
           setLive(true);
         })
-        .catch((e) => console.error("API error", e));
+        .catch((e) => console.error(e));
     }
     fetchPrices();
     const interval = setInterval(fetchPrices, 30000);
@@ -629,17 +613,6 @@ export default function LensApp() {
     if (!isNaN(num)) setInputValue(num.toLocaleString("es-MX"));
   }
 
-  function onTouchStart(e: React.TouchEvent) {
-    touchStartY.current = e.touches[0].clientY;
-  }
-  function onTouchEnd(e: React.TouchEvent) {
-    if (touchStartY.current === null) return;
-    const dy = touchStartY.current - e.changedTouches[0].clientY;
-    if (dy > 35) setExpanded(true);
-    if (dy < -35) setExpanded(false);
-    touchStartY.current = null;
-  }
-
   if (selectingFor) {
     return (
       <>
@@ -660,7 +633,6 @@ export default function LensApp() {
   return (
     <>
       <GlobalStyles />
-      {/* Sin frame de iPhone — web plano, full screen */}
       <div
         style={{
           background: "#070707",
@@ -675,10 +647,8 @@ export default function LensApp() {
           maxWidth: 480,
           margin: "0 auto",
         }}
-        onTouchStart={onTouchStart}
-        onTouchEnd={onTouchEnd}
       >
-        {/* Header — solo lens + LIVE */}
+        {/* Header */}
         <div
           style={{
             display: "flex",
@@ -729,7 +699,6 @@ export default function LensApp() {
           </div>
         </div>
 
-        {/* Body */}
         <div
           style={{
             flex: 1,
@@ -738,7 +707,7 @@ export default function LensApp() {
             overflow: "hidden",
           }}
         >
-          {/* PANTALLA PRINCIPAL */}
+          {/* PRINCIPAL */}
           {!expanded && (
             <div
               style={{
@@ -871,7 +840,7 @@ export default function LensApp() {
             </div>
           )}
 
-          {/* PANTALLA TENSIÓN */}
+          {/* TENSIÓN */}
           {expanded && (
             <div
               style={{
@@ -881,7 +850,6 @@ export default function LensApp() {
                 padding: "20px 16px 0",
               }}
             >
-              {/* Solo selección, sin input */}
               <div
                 style={{
                   display: "flex",
@@ -908,7 +876,6 @@ export default function LensApp() {
                     referencia
                   </span>
                 </div>
-
                 <button
                   onClick={swap}
                   style={{
@@ -927,7 +894,6 @@ export default function LensApp() {
                 >
                   ⇅
                 </button>
-
                 <div
                   style={{
                     display: "flex",
@@ -961,13 +927,27 @@ export default function LensApp() {
                   overflow: "hidden",
                   background: "rgba(255,255,255,0.008)",
                   border: "1px solid rgba(255,255,255,0.03)",
-                  marginBottom: 10,
+                  marginBottom: 8,
                 }}
               >
                 <TensionChart
                   topCurrency={topCurrency}
                   bottomCurrency={bottomCurrency}
                 />
+              </div>
+
+              {/* Nota poder adquisitivo */}
+              <div style={{ textAlign: "center", marginBottom: 6 }}>
+                <span
+                  style={{
+                    fontSize: 7,
+                    letterSpacing: "0.12em",
+                    color: "rgba(255,255,255,0.15)",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  poder adquisitivo relativo entre activos
+                </span>
               </div>
 
               {/* Leyenda */}
@@ -1013,41 +993,11 @@ export default function LensApp() {
                   </div>
                 ))}
               </div>
-
-              <div
-                onClick={() => setExpanded(false)}
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  gap: 4,
-                  cursor: "pointer",
-                  paddingBottom: 6,
-                }}
-              >
-                <span
-                  style={{
-                    fontSize: 6.5,
-                    letterSpacing: "0.14em",
-                    color: "rgba(255,255,255,0.10)",
-                  }}
-                >
-                  DESLIZA ABAJO
-                </span>
-                <div
-                  style={{
-                    width: 28,
-                    height: 1.5,
-                    borderRadius: 1,
-                    background: "rgba(255,255,255,0.08)",
-                  }}
-                />
-              </div>
             </div>
           )}
         </div>
 
-        {/* Barra monedas — cambia la de ABAJO, con banderas siempre visibles */}
+        {/* Barra monedas — cambia la de ABAJO */}
         <div
           style={{
             padding: "8px 10px 6px",
@@ -1061,7 +1011,7 @@ export default function LensApp() {
           />
         </div>
 
-        {/* Bottom nav */}
+        {/* Nav */}
         <div
           style={{
             display: "flex",
@@ -1110,10 +1060,7 @@ function GlobalStyles() {
         __html: `
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
       html, body { background: #070707; height: 100%; }
-      @keyframes breathe {
-        0%,100% { opacity: 0.50; }
-        50%      { opacity: 1; }
-      }
+      @keyframes breathe { 0%,100% { opacity: 0.50; } 50% { opacity: 1; } }
     `,
       }}
     />
