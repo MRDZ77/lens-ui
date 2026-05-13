@@ -620,14 +620,18 @@ export default function LensApp() {
     return () => clearInterval(interval);
   }, []);
 
-  const bottomValue = convert(
-    rawAmount,
-    topCurrency.id,
-    bottomCurrency.id,
-    rates,
-  );
+  // REGLA DE UNIDAD: mismo activo → mismo valor exacto
+  const bottomValue =
+    topCurrency.id === bottomCurrency.id
+      ? rawAmount
+      : convert(rawAmount, topCurrency.id, bottomCurrency.id, rates);
+
   const bottomAmount =
-    rawAmount > 0 ? fmt(bottomValue, bottomCurrency.id) : "—";
+    rawAmount > 0
+      ? topCurrency.id === bottomCurrency.id
+        ? inputValue
+        : fmt(bottomValue, bottomCurrency.id)
+      : "—";
 
   function swap() {
     const tmp = topCurrency;
