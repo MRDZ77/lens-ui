@@ -11,12 +11,12 @@ const STRENGTH = {
   ETH: 0.38,
 };
 const VOLATILITY = {
-  USD: 0.012,
-  EUR: 0.016,
-  XAU: 0.022,
-  MXN: 0.058,
-  BTC: 0.09,
-  ETH: 0.105,
+  USD: 0.008,
+  EUR: 0.012,
+  XAU: 0.018,
+  MXN: 0.045,
+  BTC: 0.075,
+  ETH: 0.085,
 };
 
 const CURRENCIES = [
@@ -54,7 +54,6 @@ function convert(amount: number, from: string, to: string, rates: any) {
   else if (from === "MXN") usd = amount / rates.MXN;
   else if (from === "EUR") usd = amount / rates.EUR;
   else usd = amount * rates[from];
-
   if (to === "USD") return usd;
   if (to === "MXN") return usd * rates.MXN;
   if (to === "EUR") return usd * rates.EUR;
@@ -90,16 +89,15 @@ function fmt(v: number, id: string) {
   );
 }
 
-function generateWave(points: number, amplitude: number, bias: number) {
+// Genera onda con bias = desplazamiento del centro
+// amp = amplitud de las ondulaciones (volatilidad visual)
+function generateWave(points: number, amp: number, bias: number) {
   const data: number[] = [];
   let val = bias;
   for (let i = 0; i < points; i++) {
-    val += (Math.random() - 0.5) * amplitude * 0.025;
-    val += (bias - val) * 0.05;
-    val = Math.max(
-      bias - amplitude * 0.4,
-      Math.min(bias + amplitude * 0.4, val),
-    );
+    val += (Math.random() - 0.5) * amp * 0.08;
+    val += (bias - val) * 0.04;
+    val = Math.max(bias - amp, Math.min(bias + amp, val));
     data.push(val);
   }
   return data;
@@ -110,18 +108,26 @@ function computeParams(topId: string, botId: string) {
   const sBot = STRENGTH[botId as keyof typeof STRENGTH] ?? 0.5;
   const total = sTop + sBot;
   const isSame = topId === botId;
-  const maxDisp = isSame ? 0.004 : 0.11;
+
+  // Distancia al centro según debilidad relativa
+  // El activo más débil se aleja más del centro
+  const maxDisp = isSame ? 0.01 : 0.22;
   const weaknessTop = 1 - sTop / total;
   const weaknessBot = 1 - sBot / total;
+
+  // Amplitud de ondulación = volatilidad intrínseca del activo
+  const topAmp = isSame
+    ? 0.005
+    : (VOLATILITY[topId as keyof typeof VOLATILITY] ?? 0.02);
+  const botAmp = isSame
+    ? 0.005
+    : (VOLATILITY[botId as keyof typeof VOLATILITY] ?? 0.02);
+
   return {
     topBias: weaknessTop * maxDisp,
-    botBias: -weaknessBot * maxDisp,
-    topAmp: isSame
-      ? 0.003
-      : (VOLATILITY[topId as keyof typeof VOLATILITY] ?? 0.03),
-    botAmp: isSame
-      ? 0.003
-      : (VOLATILITY[botId as keyof typeof VOLATILITY] ?? 0.03),
+    botBias: -(weaknessBot * maxDisp),
+    topAmp,
+    botAmp,
   };
 }
 
@@ -184,21 +190,16 @@ function TensionChart({
     function evolve(d: any) {
       d.top.shift();
       let t = d.top[d.top.length - 1];
-      t += (Math.random() - 0.5) * d.topAmp * 0.025;
-      t += (d.topBias - t) * 0.05;
-      t = Math.max(
-        d.topBias - d.topAmp * 0.4,
-        Math.min(d.topBias + d.topAmp * 0.4, t),
-      );
+      t += (Math.random() - 0.5) * d.topAmp * 0.08;
+      t += (d.topBias - t) * 0.04;
+      t = Math.max(d.topBias - d.topAmp, Math.min(d.topBias + d.topAmp, t));
       d.top.push(t);
+
       d.bot.shift();
       let b = d.bot[d.bot.length - 1];
-      b += (Math.random() - 0.5) * d.botAmp * 0.025;
-      b += (d.botBias - b) * 0.05;
-      b = Math.max(
-        d.botBias - d.botAmp * 0.4,
-        Math.min(d.botBias + d.botAmp * 0.4, b),
-      );
+      b += (Math.random() - 0.5) * d.botAmp * 0.08;
+      b += (d.botBias - b) * 0.04;
+      b = Math.max(d.botBias - d.botAmp, Math.min(d.botBias + d.botAmp, b));
       d.bot.push(b);
     }
 
@@ -211,11 +212,13 @@ function TensionChart({
     ) {
       const n = d.top.length;
       const mid = cH / 2;
-      const sc = cH * 3.2;
+      // sc = escala visual — más bajo = líneas más separadas visualmente
+      const sc = cH * 1.6;
       const toX = (i: number) => (i / (n - 1)) * cW;
       const toY = (v: number) => mid - v * sc;
       ctx.globalAlpha = alpha;
 
+      // Cuadrícula ultra tenue
       ctx.save();
       ctx.strokeStyle = "rgba(255,255,255,0.022)";
       ctx.lineWidth = 0.5;
@@ -233,8 +236,9 @@ function TensionChart({
       }
       ctx.restore();
 
+      // Línea central visible
       ctx.save();
-      ctx.strokeStyle = "rgba(255,255,255,0.18)";
+      ctx.strokeStyle = "rgba(255,255,255,0.20)";
       ctx.lineWidth = 0.6;
       ctx.setLineDash([4, 10]);
       ctx.beginPath();
@@ -244,17 +248,19 @@ function TensionChart({
       ctx.setLineDash([]);
       ctx.restore();
 
+      // Línea TOP — blanco humo, sin fill
       ctx.beginPath();
       ctx.moveTo(toX(0), toY(d.top[0]));
       for (let i = 1; i < n; i++) ctx.lineTo(toX(i), toY(d.top[i]));
-      ctx.strokeStyle = "rgba(220,220,220,0.82)";
-      ctx.lineWidth = 1.4;
+      ctx.strokeStyle = "rgba(220,220,220,0.85)";
+      ctx.lineWidth = 1.5;
       ctx.lineJoin = "round";
       ctx.stroke();
 
+      // Línea BOT — azul petróleo con fill hacia abajo
       const gBot = ctx.createLinearGradient(0, mid, 0, cH);
       gBot.addColorStop(0, "rgba(30,80,120,0.00)");
-      gBot.addColorStop(1, "rgba(30,80,120,0.28)");
+      gBot.addColorStop(1, "rgba(30,80,120,0.30)");
       ctx.beginPath();
       ctx.moveTo(toX(0), mid);
       for (let j = 0; j < n; j++) ctx.lineTo(toX(j), toY(d.bot[j]));
@@ -266,11 +272,12 @@ function TensionChart({
       ctx.beginPath();
       ctx.moveTo(toX(0), toY(d.bot[0]));
       for (let j = 1; j < n; j++) ctx.lineTo(toX(j), toY(d.bot[j]));
-      ctx.strokeStyle = "rgba(30,100,160,0.88)";
-      ctx.lineWidth = 1.4;
+      ctx.strokeStyle = "rgba(30,100,160,0.90)";
+      ctx.lineWidth = 1.5;
       ctx.lineJoin = "round";
       ctx.stroke();
 
+      // Pulso en top
       const pulse = (Math.sin(frameRef.current * 0.07) + 1) / 2;
       const lx = toX(n - 1);
       const ly = toY(d.top[n - 1]);
