@@ -975,7 +975,7 @@ export default function LensApp() {
                     textTransform: "uppercase",
                   }}
                 >
-                  poder adquisitivo relativo entre activos
+                  aseet value relation
                 </span>
               </div>
 
