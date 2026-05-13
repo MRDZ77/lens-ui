@@ -31,27 +31,34 @@ const CURRENCIES = [
 const DEFAULT_RATES = {
   MXN: 17.21,
   USD: 1,
-  EUR: 1.175,
+  EUR: 0.849,
   BTC: 81351,
   ETH: 2357,
   XAU: 2320,
 };
 
 function buildRates(data: any) {
-  const eurRaw = data?.exchangeRates?.EUR?.usdRate;
   return {
     USD: 1,
-    MXN: data?.exchangeRates?.MXN?.usdRate ?? DEFAULT_RATES.MXN,
-    EUR: eurRaw ? 1 / eurRaw : DEFAULT_RATES.EUR,
-    BTC: data?.prices?.BTC?.usd ?? DEFAULT_RATES.BTC,
-    ETH: data?.prices?.ETH?.usd ?? DEFAULT_RATES.ETH,
-    XAU: data?.prices?.XAU?.usd ?? DEFAULT_RATES.XAU,
+    MXN: data?.exchangeRates?.MXN?.usdRate ?? 17.21,
+    EUR: data?.exchangeRates?.EUR?.usdRate ?? 0.849,
+    BTC: data?.prices?.BTC?.usd ?? 81351,
+    ETH: data?.prices?.ETH?.usd ?? 2357,
+    XAU: data?.prices?.XAU?.usd ?? 2320,
   };
 }
 
 function convert(amount: number, from: string, to: string, rates: any) {
-  const usd = from === "USD" ? amount : amount / rates[from];
-  return to === "USD" ? usd : usd * rates[to];
+  let usd: number;
+  if (from === "USD") usd = amount;
+  else if (from === "MXN") usd = amount / rates.MXN;
+  else if (from === "EUR") usd = amount / rates.EUR;
+  else usd = amount * rates[from];
+
+  if (to === "USD") return usd;
+  if (to === "MXN") return usd * rates.MXN;
+  if (to === "EUR") return usd * rates.EUR;
+  return usd / rates[to];
 }
 
 function fmt(v: number, id: string) {
@@ -209,7 +216,6 @@ function TensionChart({
       const toY = (v: number) => mid - v * sc;
       ctx.globalAlpha = alpha;
 
-      // Cuadrícula ultra tenue
       ctx.save();
       ctx.strokeStyle = "rgba(255,255,255,0.022)";
       ctx.lineWidth = 0.5;
@@ -227,7 +233,6 @@ function TensionChart({
       }
       ctx.restore();
 
-      // Línea central gris tenue
       ctx.save();
       ctx.strokeStyle = "rgba(255,255,255,0.18)";
       ctx.lineWidth = 0.6;
@@ -239,7 +244,6 @@ function TensionChart({
       ctx.setLineDash([]);
       ctx.restore();
 
-      // Línea TOP — blanco humo, sin fill
       ctx.beginPath();
       ctx.moveTo(toX(0), toY(d.top[0]));
       for (let i = 1; i < n; i++) ctx.lineTo(toX(i), toY(d.top[i]));
@@ -248,7 +252,6 @@ function TensionChart({
       ctx.lineJoin = "round";
       ctx.stroke();
 
-      // Línea BOT — azul petróleo con fill hacia abajo
       const gBot = ctx.createLinearGradient(0, mid, 0, cH);
       gBot.addColorStop(0, "rgba(30,80,120,0.00)");
       gBot.addColorStop(1, "rgba(30,80,120,0.28)");
@@ -268,7 +271,6 @@ function TensionChart({
       ctx.lineJoin = "round";
       ctx.stroke();
 
-      // Pulso mínimo en top
       const pulse = (Math.sin(frameRef.current * 0.07) + 1) / 2;
       const lx = toX(n - 1);
       const ly = toY(d.top[n - 1]);
@@ -650,7 +652,6 @@ export default function LensApp() {
           margin: "0 auto",
         }}
       >
-        {/* Header */}
         <div
           style={{
             display: "flex",
@@ -709,7 +710,6 @@ export default function LensApp() {
             overflow: "hidden",
           }}
         >
-          {/* PRINCIPAL */}
           {!expanded && (
             <div
               style={{
@@ -842,7 +842,6 @@ export default function LensApp() {
             </div>
           )}
 
-          {/* TENSIÓN */}
           {expanded && (
             <div
               style={{
