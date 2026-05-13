@@ -2,7 +2,6 @@ import { useState, useEffect, useRef, useCallback } from "react";
 
 const API_URL = "https://lens-api-qu0x.onrender.com/api/prices";
 
-// Valor relativo por unidad (más alto = más valor concentrado = más cerca del centro)
 const VALUE = {
   USD: 1.0,
   EUR: 1.18,
@@ -11,8 +10,6 @@ const VALUE = {
   ETH: 2357,
   MXN: 0.058,
 };
-
-// Volatilidad = amplitud de ondulación (independiente del valor)
 const VOLATILITY = {
   USD: 0.006,
   EUR: 0.009,
@@ -107,10 +104,9 @@ function generateWave(points: number, amp: number, bias: number) {
 function computeParams(topId: string, botId: string, rates: any) {
   const isSame = topId === botId;
   if (isSame) {
-    return { topBias: 0.008, botBias: -0.008, topAmp: 0.004, botAmp: 0.004 };
+    return { topBias: 0.012, botBias: -0.012, topAmp: 0.004, botAmp: 0.004 };
   }
 
-  // Valor de cada activo en USD (escala dinámica por pareja)
   const vTop =
     topId === "MXN"
       ? 1 / rates.MXN
@@ -125,16 +121,16 @@ function computeParams(topId: string, botId: string, rates: any) {
         ? 1 / rates.EUR
         : (rates[botId] ?? VALUE[botId as keyof typeof VALUE] ?? 1);
 
-  // Normalizar: el que tiene MÁS valor USD va MÁS CERCA del centro
   const total = vTop + vBot;
-  const shareTop = vTop / total; // 0 a 1, más alto = más fuerte
+  const shareTop = vTop / total;
   const shareBot = vBot / total;
 
-  // El más fuerte se acerca al centro (bias pequeño)
-  // El más débil se aleja (bias grande)
+  // El más fuerte (shareTop/shareBot más alto) se acerca al centro
+  // Mínimo bias de 0.04 para que SIEMPRE se vea la línea
   const maxDisp = 0.2;
-  const topBias = (1 - shareTop) * maxDisp; // débil = lejos arriba
-  const botBias = -(1 - shareBot) * maxDisp; // débil = lejos abajo
+  const minDisp = 0.04;
+  const topBias = minDisp + (1 - shareTop) * maxDisp;
+  const botBias = -(minDisp + (1 - shareBot) * maxDisp);
 
   return {
     topBias,
@@ -267,19 +263,24 @@ function TensionChart({
       ctx.setLineDash([]);
       ctx.restore();
 
-      // TOP — blanco humo, sin fill
+      // TOP — opacidad dinámica: entre más cerca del centro más tenue (campo magnético)
+      // siempre visible pero más sutil cuando es el activo fuerte
+      const topDistNorm = Math.min(Math.abs(d.topBias) / 0.2, 1);
+      const topOpacity = 0.3 + topDistNorm * 0.55; // 0.30 mínimo, 0.85 máximo
       ctx.beginPath();
       ctx.moveTo(toX(0), toY(d.top[0]));
       for (let i = 1; i < n; i++) ctx.lineTo(toX(i), toY(d.top[i]));
-      ctx.strokeStyle = "rgba(220,220,220,0.85)";
+      ctx.strokeStyle = `rgba(200,200,200,${topOpacity})`;
       ctx.lineWidth = 1.5;
       ctx.lineJoin = "round";
       ctx.stroke();
 
-      // BOT — azul petróleo con fill
+      // BOT — azul petróleo con fill, opacidad también dinámica
+      const botDistNorm = Math.min(Math.abs(d.botBias) / 0.2, 1);
+      const botOpacity = 0.3 + botDistNorm * 0.6;
       const gBot = ctx.createLinearGradient(0, mid, 0, cH);
       gBot.addColorStop(0, "rgba(30,80,120,0.00)");
-      gBot.addColorStop(1, "rgba(30,80,120,0.30)");
+      gBot.addColorStop(1, `rgba(30,80,120,${botOpacity * 0.45})`);
       ctx.beginPath();
       ctx.moveTo(toX(0), mid);
       for (let j = 0; j < n; j++) ctx.lineTo(toX(j), toY(d.bot[j]));
@@ -291,22 +292,22 @@ function TensionChart({
       ctx.beginPath();
       ctx.moveTo(toX(0), toY(d.bot[0]));
       for (let j = 1; j < n; j++) ctx.lineTo(toX(j), toY(d.bot[j]));
-      ctx.strokeStyle = "rgba(30,100,160,0.90)";
+      ctx.strokeStyle = `rgba(30,100,160,${botOpacity})`;
       ctx.lineWidth = 1.5;
       ctx.lineJoin = "round";
       ctx.stroke();
 
-      // Pulso
+      // Pulso en top
       const pulse = (Math.sin(frameRef.current * 0.07) + 1) / 2;
       const lx = toX(n - 1);
       const ly = toY(d.top[n - 1]);
       ctx.beginPath();
       ctx.arc(lx, ly, 2.5, 0, Math.PI * 2);
-      ctx.fillStyle = "rgba(220,220,220,0.9)";
+      ctx.fillStyle = `rgba(200,200,200,${topOpacity})`;
       ctx.fill();
       ctx.beginPath();
       ctx.arc(lx, ly, 4 + pulse * 3, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(220,220,220,${0.08 - pulse * 0.07})`;
+      ctx.fillStyle = `rgba(200,200,200,${0.07 - pulse * 0.06})`;
       ctx.fill();
 
       if (hoverRef.current) {
@@ -323,11 +324,11 @@ function TensionChart({
         ctx.setLineDash([]);
         ctx.beginPath();
         ctx.arc(hx, toY(d.top[hi]), 2.5, 0, Math.PI * 2);
-        ctx.fillStyle = "rgba(220,220,220,0.8)";
+        ctx.fillStyle = `rgba(200,200,200,${topOpacity})`;
         ctx.fill();
         ctx.beginPath();
         ctx.arc(hx, toY(d.bot[hi]), 2.5, 0, Math.PI * 2);
-        ctx.fillStyle = "rgba(30,100,160,0.8)";
+        ctx.fillStyle = `rgba(30,100,160,${botOpacity})`;
         ctx.fill();
         ctx.restore();
       }
@@ -599,7 +600,7 @@ export default function LensApp() {
   const [selectingFor, setSelectingFor] = useState<string | null>(null);
   const [rates, setRates] = useState<any>(DEFAULT_RATES);
   const [live, setLive] = useState(false);
-  const [inputValue, setInputValue] = useState("20,000");
+  const [inputValue, setInputValue] = useState("");
 
   const rawAmount = parseFloat(inputValue.replace(/,/g, "")) || 0;
 
@@ -625,7 +626,8 @@ export default function LensApp() {
     bottomCurrency.id,
     rates,
   );
-  const bottomAmount = fmt(bottomValue, bottomCurrency.id);
+  const bottomAmount =
+    rawAmount > 0 ? fmt(bottomValue, bottomCurrency.id) : "—";
 
   function swap() {
     const tmp = topCurrency;
@@ -751,11 +753,12 @@ export default function LensApp() {
                 <input
                   value={inputValue}
                   onChange={handleInput}
+                  placeholder="0"
                   style={{
                     fontSize: 58,
                     fontFamily: "sans-serif",
                     fontWeight: 200,
-                    color: "#fff",
+                    color: inputValue ? "#fff" : "rgba(255,255,255,0.18)",
                     letterSpacing: "-0.01em",
                     lineHeight: 1,
                     background: "none",
@@ -763,7 +766,7 @@ export default function LensApp() {
                     outline: "none",
                     textAlign: "center",
                     width: "100%",
-                    caretColor: "rgba(255,255,255,0.5)",
+                    caretColor: "rgba(255,255,255,0.4)",
                   }}
                 />
                 <div style={{ marginTop: 12 }}>
@@ -978,9 +981,9 @@ export default function LensApp() {
 
               <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
                 {[
-                  { color: "rgba(220,220,220,0.70)", label: topCurrency.label },
+                  { color: "rgba(200,200,200,0.55)", label: topCurrency.label },
                   {
-                    color: "rgba(30,100,160,0.80)",
+                    color: "rgba(30,100,160,0.75)",
                     label: bottomCurrency.label,
                   },
                 ].map((item, i) => (
@@ -1083,6 +1086,7 @@ function GlobalStyles() {
         __html: `
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
       html, body { background: #050505; height: 100%; }
+      input::placeholder { color: rgba(255,255,255,0.18); }
       @keyframes breathe { 0%,100% { opacity: 0.45; } 50% { opacity: 1; } }
     `,
       }}
