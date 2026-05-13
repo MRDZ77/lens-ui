@@ -31,17 +31,18 @@ const CURRENCIES = [
 const DEFAULT_RATES = {
   MXN: 17.21,
   USD: 1,
-  EUR: 0.849,
+  EUR: 1.175,
   BTC: 81351,
   ETH: 2357,
   XAU: 2320,
 };
 
 function buildRates(data: any) {
+  const eurRaw = data?.exchangeRates?.EUR?.usdRate;
   return {
     USD: 1,
     MXN: data?.exchangeRates?.MXN?.usdRate ?? DEFAULT_RATES.MXN,
-    EUR: data?.exchangeRates?.EUR?.usdRate ?? DEFAULT_RATES.EUR,
+    EUR: eurRaw ? 1 / eurRaw : DEFAULT_RATES.EUR,
     BTC: data?.prices?.BTC?.usd ?? DEFAULT_RATES.BTC,
     ETH: data?.prices?.ETH?.usd ?? DEFAULT_RATES.ETH,
     XAU: data?.prices?.XAU?.usd ?? DEFAULT_RATES.XAU,
@@ -208,9 +209,9 @@ function TensionChart({
       const toY = (v: number) => mid - v * sc;
       ctx.globalAlpha = alpha;
 
-      // Cuadrícula
+      // Cuadrícula ultra tenue
       ctx.save();
-      ctx.strokeStyle = "rgba(255,255,255,0.025)";
+      ctx.strokeStyle = "rgba(255,255,255,0.022)";
       ctx.lineWidth = 0.5;
       for (let c = 1; c < 6; c++) {
         ctx.beginPath();
@@ -226,11 +227,11 @@ function TensionChart({
       }
       ctx.restore();
 
-      // Línea central
+      // Línea central gris tenue
       ctx.save();
-      ctx.strokeStyle = "rgba(255,255,255,0.22)";
-      ctx.lineWidth = 0.75;
-      ctx.setLineDash([4, 8]);
+      ctx.strokeStyle = "rgba(255,255,255,0.18)";
+      ctx.lineWidth = 0.6;
+      ctx.setLineDash([4, 10]);
       ctx.beginPath();
       ctx.moveTo(0, mid);
       ctx.lineTo(cW, mid);
@@ -238,19 +239,19 @@ function TensionChart({
       ctx.setLineDash([]);
       ctx.restore();
 
-      // Línea TOP azul sin fill
+      // Línea TOP — blanco humo, sin fill
       ctx.beginPath();
       ctx.moveTo(toX(0), toY(d.top[0]));
       for (let i = 1; i < n; i++) ctx.lineTo(toX(i), toY(d.top[i]));
-      ctx.strokeStyle = "rgba(100,180,255,0.85)";
-      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = "rgba(220,220,220,0.82)";
+      ctx.lineWidth = 1.4;
       ctx.lineJoin = "round";
       ctx.stroke();
 
-      // Línea BOT morado con fill
+      // Línea BOT — azul petróleo con fill hacia abajo
       const gBot = ctx.createLinearGradient(0, mid, 0, cH);
-      gBot.addColorStop(0, "rgba(139,124,255,0.00)");
-      gBot.addColorStop(1, "rgba(139,124,255,0.22)");
+      gBot.addColorStop(0, "rgba(30,80,120,0.00)");
+      gBot.addColorStop(1, "rgba(30,80,120,0.28)");
       ctx.beginPath();
       ctx.moveTo(toX(0), mid);
       for (let j = 0; j < n; j++) ctx.lineTo(toX(j), toY(d.bot[j]));
@@ -258,32 +259,33 @@ function TensionChart({
       ctx.closePath();
       ctx.fillStyle = gBot;
       ctx.fill();
+
       ctx.beginPath();
       ctx.moveTo(toX(0), toY(d.bot[0]));
       for (let j = 1; j < n; j++) ctx.lineTo(toX(j), toY(d.bot[j]));
-      ctx.strokeStyle = "rgba(139,124,255,0.85)";
-      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = "rgba(30,100,160,0.88)";
+      ctx.lineWidth = 1.4;
       ctx.lineJoin = "round";
       ctx.stroke();
 
-      // Pulso
+      // Pulso mínimo en top
       const pulse = (Math.sin(frameRef.current * 0.07) + 1) / 2;
       const lx = toX(n - 1);
       const ly = toY(d.top[n - 1]);
       ctx.beginPath();
-      ctx.arc(lx, ly, 3, 0, Math.PI * 2);
-      ctx.fillStyle = "rgba(100,180,255,1)";
+      ctx.arc(lx, ly, 2.5, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(220,220,220,0.9)";
       ctx.fill();
       ctx.beginPath();
-      ctx.arc(lx, ly, 5 + pulse * 4, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(100,180,255,${0.12 - pulse * 0.1})`;
+      ctx.arc(lx, ly, 4 + pulse * 3, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(220,220,220,${0.08 - pulse * 0.07})`;
       ctx.fill();
 
       if (hoverRef.current) {
         const hx = hoverRef.current.x;
         const hi = hoverRef.current.index;
         ctx.save();
-        ctx.strokeStyle = "rgba(255,255,255,0.08)";
+        ctx.strokeStyle = "rgba(255,255,255,0.07)";
         ctx.lineWidth = 0.75;
         ctx.setLineDash([2, 6]);
         ctx.beginPath();
@@ -293,11 +295,11 @@ function TensionChart({
         ctx.setLineDash([]);
         ctx.beginPath();
         ctx.arc(hx, toY(d.top[hi]), 2.5, 0, Math.PI * 2);
-        ctx.fillStyle = "rgba(100,180,255,0.9)";
+        ctx.fillStyle = "rgba(220,220,220,0.8)";
         ctx.fill();
         ctx.beginPath();
         ctx.arc(hx, toY(d.bot[hi]), 2.5, 0, Math.PI * 2);
-        ctx.fillStyle = "rgba(139,124,255,0.8)";
+        ctx.fillStyle = "rgba(30,100,160,0.8)";
         ctx.fill();
         ctx.restore();
       }
@@ -381,8 +383,8 @@ function CurrencyPill({
         display: "inline-flex",
         alignItems: "center",
         gap: 6,
-        background: "rgba(255,255,255,0.06)",
-        border: "1px solid rgba(255,255,255,0.10)",
+        background: "rgba(255,255,255,0.05)",
+        border: "1px solid rgba(255,255,255,0.08)",
         borderRadius: 20,
         padding: "6px 12px",
         cursor: "pointer",
@@ -399,8 +401,8 @@ function CurrencyPill({
       ) : (
         <span style={{ fontSize: 15 }}>{currency.flag}</span>
       )}
-      <span style={{ opacity: 0.8 }}>{currency.label}</span>
-      <span style={{ opacity: 0.25, fontSize: 9 }}>▾</span>
+      <span style={{ opacity: 0.78 }}>{currency.label}</span>
+      <span style={{ opacity: 0.22, fontSize: 9 }}>▾</span>
     </button>
   );
 }
@@ -428,11 +430,11 @@ function CurrencyBar({
               alignItems: "center",
               gap: 3,
               background: active
-                ? "rgba(139,124,255,0.14)"
-                : "rgba(255,255,255,0.05)",
+                ? "rgba(255,255,255,0.07)"
+                : "rgba(255,255,255,0.03)",
               border: active
-                ? "1px solid rgba(139,124,255,0.40)"
-                : "1px solid rgba(255,255,255,0.10)",
+                ? "1px solid rgba(255,255,255,0.18)"
+                : "1px solid rgba(255,255,255,0.07)",
               borderRadius: 12,
               padding: "7px 5px",
               cursor: "pointer",
@@ -454,8 +456,8 @@ function CurrencyBar({
                 fontFamily: "monospace",
                 fontSize: 7.5,
                 color: active
-                  ? "rgba(139,124,255,0.95)"
-                  : "rgba(255,255,255,0.45)",
+                  ? "rgba(255,255,255,0.70)"
+                  : "rgba(255,255,255,0.30)",
                 letterSpacing: "0.06em",
               }}
             >
@@ -480,7 +482,7 @@ function CurrencySelector({
   return (
     <div
       style={{
-        background: "#070707",
+        background: "#050505",
         minHeight: "100vh",
         display: "flex",
         alignItems: "center",
@@ -491,7 +493,7 @@ function CurrencySelector({
       <div style={{ width: 300 }}>
         <p
           style={{
-            color: "rgba(255,255,255,0.20)",
+            color: "rgba(255,255,255,0.18)",
             fontSize: 8.5,
             letterSpacing: "0.2em",
             marginBottom: 22,
@@ -510,7 +512,7 @@ function CurrencySelector({
               alignItems: "center",
               gap: 14,
               width: "100%",
-              background: "rgba(255,255,255,0.025)",
+              background: "rgba(255,255,255,0.02)",
               border: "1px solid rgba(255,255,255,0.05)",
               borderRadius: 12,
               padding: "13px 16px",
@@ -533,7 +535,7 @@ function CurrencySelector({
               <div style={{ fontSize: 12, letterSpacing: "0.09em" }}>
                 {c.label}
               </div>
-              <div style={{ fontSize: 8.5, opacity: 0.28, marginTop: 2 }}>
+              <div style={{ fontSize: 8.5, opacity: 0.25, marginTop: 2 }}>
                 {c.name}
               </div>
             </div>
@@ -546,7 +548,7 @@ function CurrencySelector({
             width: "100%",
             background: "none",
             border: "none",
-            color: "rgba(255,255,255,0.14)",
+            color: "rgba(255,255,255,0.12)",
             fontFamily: "monospace",
             fontSize: 9.5,
             letterSpacing: "0.12em",
@@ -635,7 +637,7 @@ export default function LensApp() {
       <GlobalStyles />
       <div
         style={{
-          background: "#070707",
+          background: "#050505",
           minHeight: "100vh",
           width: "100%",
           display: "flex",
@@ -663,7 +665,7 @@ export default function LensApp() {
               fontWeight: 200,
               fontSize: 18,
               letterSpacing: "0.38em",
-              color: "rgba(255,255,255,0.82)",
+              color: "rgba(255,255,255,0.75)",
             }}
           >
             l e n s
@@ -681,7 +683,7 @@ export default function LensApp() {
                 width: 5,
                 height: 5,
                 borderRadius: "50%",
-                background: live ? "#4ade80" : "#555",
+                background: live ? "#4ade80" : "#444",
                 animation: live ? "breathe 2.5s ease-in-out infinite" : "none",
               }}
             />
@@ -690,8 +692,8 @@ export default function LensApp() {
                 fontSize: 7.5,
                 letterSpacing: "0.18em",
                 color: live
-                  ? "rgba(74,222,128,0.55)"
-                  : "rgba(255,255,255,0.18)",
+                  ? "rgba(74,222,128,0.50)"
+                  : "rgba(255,255,255,0.15)",
               }}
             >
               {live ? "LIVE" : "OFFLINE"}
@@ -735,7 +737,7 @@ export default function LensApp() {
                     outline: "none",
                     textAlign: "center",
                     width: "100%",
-                    caretColor: "rgba(139,124,255,0.8)",
+                    caretColor: "rgba(255,255,255,0.5)",
                   }}
                 />
                 <div style={{ marginTop: 12 }}>
@@ -749,7 +751,7 @@ export default function LensApp() {
                     marginTop: 6,
                     fontSize: 8,
                     letterSpacing: "0.18em",
-                    color: "rgba(255,255,255,0.17)",
+                    color: "rgba(255,255,255,0.15)",
                   }}
                 >
                   {topCurrency.name.toUpperCase()}
@@ -762,10 +764,10 @@ export default function LensApp() {
                   width: 42,
                   height: 42,
                   borderRadius: "50%",
-                  background: "rgba(139,124,255,0.10)",
-                  border: "1px solid rgba(139,124,255,0.30)",
+                  background: "rgba(255,255,255,0.04)",
+                  border: "1px solid rgba(255,255,255,0.12)",
                   cursor: "pointer",
-                  color: "rgba(139,124,255,0.85)",
+                  color: "rgba(255,255,255,0.55)",
                   fontSize: 17,
                   display: "flex",
                   alignItems: "center",
@@ -782,7 +784,7 @@ export default function LensApp() {
                     fontSize: 44,
                     fontFamily: "sans-serif",
                     fontWeight: 200,
-                    color: "rgba(255,255,255,0.58)",
+                    color: "rgba(255,255,255,0.52)",
                     letterSpacing: "-0.01em",
                     lineHeight: 1,
                   }}
@@ -800,7 +802,7 @@ export default function LensApp() {
                     marginTop: 6,
                     fontSize: 8,
                     letterSpacing: "0.18em",
-                    color: "rgba(255,255,255,0.17)",
+                    color: "rgba(255,255,255,0.15)",
                   }}
                 >
                   {bottomCurrency.name.toUpperCase()}
@@ -821,16 +823,16 @@ export default function LensApp() {
                 <div
                   style={{
                     width: 28,
-                    height: 1.5,
+                    height: 1,
                     borderRadius: 1,
-                    background: "rgba(139,124,255,0.35)",
+                    background: "rgba(255,255,255,0.20)",
                   }}
                 />
                 <span
                   style={{
                     fontSize: 7.5,
                     letterSpacing: "0.18em",
-                    color: "rgba(139,124,255,0.32)",
+                    color: "rgba(255,255,255,0.18)",
                     textTransform: "uppercase",
                   }}
                 >
@@ -869,7 +871,7 @@ export default function LensApp() {
                     style={{
                       fontSize: 7.5,
                       letterSpacing: "0.12em",
-                      color: "rgba(100,180,255,0.55)",
+                      color: "rgba(220,220,220,0.40)",
                       paddingLeft: 2,
                     }}
                   >
@@ -882,10 +884,10 @@ export default function LensApp() {
                     width: 32,
                     height: 32,
                     borderRadius: "50%",
-                    background: "rgba(139,124,255,0.08)",
-                    border: "1px solid rgba(139,124,255,0.22)",
+                    background: "rgba(255,255,255,0.04)",
+                    border: "1px solid rgba(255,255,255,0.10)",
                     cursor: "pointer",
-                    color: "rgba(139,124,255,0.72)",
+                    color: "rgba(255,255,255,0.40)",
                     fontSize: 14,
                     display: "flex",
                     alignItems: "center",
@@ -910,7 +912,7 @@ export default function LensApp() {
                     style={{
                       fontSize: 7.5,
                       letterSpacing: "0.12em",
-                      color: "rgba(139,124,255,0.50)",
+                      color: "rgba(30,100,160,0.60)",
                       paddingRight: 2,
                     }}
                   >
@@ -919,14 +921,13 @@ export default function LensApp() {
                 </div>
               </div>
 
-              {/* Gráfica */}
               <div
                 style={{
                   flex: 1,
                   borderRadius: 10,
                   overflow: "hidden",
-                  background: "rgba(255,255,255,0.008)",
-                  border: "1px solid rgba(255,255,255,0.03)",
+                  background: "rgba(255,255,255,0.005)",
+                  border: "1px solid rgba(255,255,255,0.025)",
                   marginBottom: 8,
                 }}
               >
@@ -936,13 +937,12 @@ export default function LensApp() {
                 />
               </div>
 
-              {/* Nota poder adquisitivo */}
               <div style={{ textAlign: "center", marginBottom: 6 }}>
                 <span
                   style={{
                     fontSize: 7,
                     letterSpacing: "0.12em",
-                    color: "rgba(255,255,255,0.15)",
+                    color: "rgba(255,255,255,0.12)",
                     textTransform: "uppercase",
                   }}
                 >
@@ -950,12 +950,11 @@ export default function LensApp() {
                 </span>
               </div>
 
-              {/* Leyenda */}
               <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
                 {[
-                  { color: "rgba(100,180,255,0.80)", label: topCurrency.label },
+                  { color: "rgba(220,220,220,0.70)", label: topCurrency.label },
                   {
-                    color: "rgba(139,124,255,0.80)",
+                    color: "rgba(30,100,160,0.80)",
                     label: bottomCurrency.label,
                   },
                 ].map((item, i) => (
@@ -966,8 +965,8 @@ export default function LensApp() {
                       display: "flex",
                       alignItems: "center",
                       gap: 6,
-                      background: "rgba(255,255,255,0.010)",
-                      border: "1px solid rgba(255,255,255,0.028)",
+                      background: "rgba(255,255,255,0.008)",
+                      border: "1px solid rgba(255,255,255,0.022)",
                       borderRadius: 7,
                       padding: "5px 8px",
                     }}
@@ -985,7 +984,7 @@ export default function LensApp() {
                       style={{
                         fontSize: 7.5,
                         letterSpacing: "0.08em",
-                        color: "rgba(255,255,255,0.30)",
+                        color: "rgba(255,255,255,0.25)",
                       }}
                     >
                       {item.label}
@@ -997,11 +996,10 @@ export default function LensApp() {
           )}
         </div>
 
-        {/* Barra monedas — cambia la de ABAJO */}
         <div
           style={{
             padding: "8px 10px 6px",
-            borderTop: "1px solid rgba(255,255,255,0.04)",
+            borderTop: "1px solid rgba(255,255,255,0.035)",
           }}
         >
           <CurrencyBar
@@ -1011,7 +1009,6 @@ export default function LensApp() {
           />
         </div>
 
-        {/* Nav */}
         <div
           style={{
             display: "flex",
@@ -1032,13 +1029,13 @@ export default function LensApp() {
                   border: "none",
                   cursor: "pointer",
                   color: active
-                    ? "rgba(255,255,255,0.55)"
-                    : "rgba(255,255,255,0.18)",
+                    ? "rgba(255,255,255,0.50)"
+                    : "rgba(255,255,255,0.15)",
                   fontFamily: "monospace",
                   fontSize: 8.5,
                   letterSpacing: "0.16em",
                   borderBottom: active
-                    ? "1px solid rgba(139,124,255,0.55)"
+                    ? "1px solid rgba(255,255,255,0.30)"
                     : "1px solid transparent",
                   paddingBottom: 3,
                 }}
@@ -1059,8 +1056,8 @@ function GlobalStyles() {
       dangerouslySetInnerHTML={{
         __html: `
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-      html, body { background: #070707; height: 100%; }
-      @keyframes breathe { 0%,100% { opacity: 0.50; } 50% { opacity: 1; } }
+      html, body { background: #050505; height: 100%; }
+      @keyframes breathe { 0%,100% { opacity: 0.45; } 50% { opacity: 1; } }
     `,
       }}
     />
