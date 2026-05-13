@@ -2,21 +2,24 @@ import { useState, useEffect, useRef, useCallback } from "react";
 
 const API_URL = "https://lens-api-qu0x.onrender.com/api/prices";
 
-const STRENGTH = {
-  USD: 0.95,
-  EUR: 0.88,
-  XAU: 0.8,
-  MXN: 0.32,
-  BTC: 0.42,
-  ETH: 0.38,
+// Valor relativo por unidad (más alto = más valor concentrado = más cerca del centro)
+const VALUE = {
+  USD: 1.0,
+  EUR: 1.18,
+  XAU: 2320,
+  BTC: 81351,
+  ETH: 2357,
+  MXN: 0.058,
 };
+
+// Volatilidad = amplitud de ondulación (independiente del valor)
 const VOLATILITY = {
-  USD: 0.008,
-  EUR: 0.012,
-  XAU: 0.018,
-  MXN: 0.045,
-  BTC: 0.075,
-  ETH: 0.085,
+  USD: 0.006,
+  EUR: 0.009,
+  XAU: 0.016,
+  MXN: 0.038,
+  BTC: 0.072,
+  ETH: 0.082,
 };
 
 const CURRENCIES = [
@@ -89,54 +92,66 @@ function fmt(v: number, id: string) {
   );
 }
 
-// Genera onda con bias = desplazamiento del centro
-// amp = amplitud de las ondulaciones (volatilidad visual)
 function generateWave(points: number, amp: number, bias: number) {
   const data: number[] = [];
   let val = bias;
   for (let i = 0; i < points; i++) {
-    val += (Math.random() - 0.5) * amp * 0.08;
-    val += (bias - val) * 0.04;
-    val = Math.max(bias - amp, Math.min(bias + amp, val));
+    val += (Math.random() - 0.5) * amp * 0.09;
+    val += (bias - val) * 0.035;
+    val = Math.max(bias - amp * 1.2, Math.min(bias + amp * 1.2, val));
     data.push(val);
   }
   return data;
 }
 
-function computeParams(topId: string, botId: string) {
-  const sTop = STRENGTH[topId as keyof typeof STRENGTH] ?? 0.5;
-  const sBot = STRENGTH[botId as keyof typeof STRENGTH] ?? 0.5;
-  const total = sTop + sBot;
+function computeParams(topId: string, botId: string, rates: any) {
   const isSame = topId === botId;
+  if (isSame) {
+    return { topBias: 0.008, botBias: -0.008, topAmp: 0.004, botAmp: 0.004 };
+  }
 
-  // Distancia al centro según debilidad relativa
-  // El activo más débil se aleja más del centro
-  const maxDisp = isSame ? 0.01 : 0.22;
-  const weaknessTop = 1 - sTop / total;
-  const weaknessBot = 1 - sBot / total;
+  // Valor de cada activo en USD (escala dinámica por pareja)
+  const vTop =
+    topId === "MXN"
+      ? 1 / rates.MXN
+      : topId === "EUR"
+        ? 1 / rates.EUR
+        : (rates[topId] ?? VALUE[topId as keyof typeof VALUE] ?? 1);
 
-  // Amplitud de ondulación = volatilidad intrínseca del activo
-  const topAmp = isSame
-    ? 0.005
-    : (VOLATILITY[topId as keyof typeof VOLATILITY] ?? 0.02);
-  const botAmp = isSame
-    ? 0.005
-    : (VOLATILITY[botId as keyof typeof VOLATILITY] ?? 0.02);
+  const vBot =
+    botId === "MXN"
+      ? 1 / rates.MXN
+      : botId === "EUR"
+        ? 1 / rates.EUR
+        : (rates[botId] ?? VALUE[botId as keyof typeof VALUE] ?? 1);
+
+  // Normalizar: el que tiene MÁS valor USD va MÁS CERCA del centro
+  const total = vTop + vBot;
+  const shareTop = vTop / total; // 0 a 1, más alto = más fuerte
+  const shareBot = vBot / total;
+
+  // El más fuerte se acerca al centro (bias pequeño)
+  // El más débil se aleja (bias grande)
+  const maxDisp = 0.2;
+  const topBias = (1 - shareTop) * maxDisp; // débil = lejos arriba
+  const botBias = -(1 - shareBot) * maxDisp; // débil = lejos abajo
 
   return {
-    topBias: weaknessTop * maxDisp,
-    botBias: -(weaknessBot * maxDisp),
-    topAmp,
-    botAmp,
+    topBias,
+    botBias,
+    topAmp: VOLATILITY[topId as keyof typeof VOLATILITY] ?? 0.02,
+    botAmp: VOLATILITY[botId as keyof typeof VOLATILITY] ?? 0.02,
   };
 }
 
 function TensionChart({
   topCurrency,
   bottomCurrency,
+  rates,
 }: {
   topCurrency: any;
   bottomCurrency: any;
+  rates: any;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const dataRef = useRef<any>(null);
@@ -145,8 +160,8 @@ function TensionChart({
   const hoverRef = useRef<any>(null);
   const transRef = useRef<any>({ active: false });
 
-  const initData = useCallback((topId: string, botId: string) => {
-    const p = computeParams(topId, botId);
+  const initData = useCallback((topId: string, botId: string, r: any) => {
+    const p = computeParams(topId, botId, r);
     return {
       ...p,
       top: generateWave(120, p.topAmp, p.topBias),
@@ -155,7 +170,7 @@ function TensionChart({
   }, []);
 
   useEffect(() => {
-    const next = initData(topCurrency.id, bottomCurrency.id);
+    const next = initData(topCurrency.id, bottomCurrency.id, rates);
     if (!dataRef.current) {
       dataRef.current = next;
       return;
@@ -174,7 +189,7 @@ function TensionChart({
       }
     }
     requestAnimationFrame(fade);
-  }, [topCurrency.id, bottomCurrency.id]);
+  }, [topCurrency.id, bottomCurrency.id, rates]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -185,21 +200,26 @@ function TensionChart({
     canvas.height = canvas.offsetHeight * dpr;
     ctx.scale(dpr, dpr);
     if (!dataRef.current)
-      dataRef.current = initData(topCurrency.id, bottomCurrency.id);
+      dataRef.current = initData(topCurrency.id, bottomCurrency.id, rates);
 
     function evolve(d: any) {
       d.top.shift();
       let t = d.top[d.top.length - 1];
-      t += (Math.random() - 0.5) * d.topAmp * 0.08;
-      t += (d.topBias - t) * 0.04;
-      t = Math.max(d.topBias - d.topAmp, Math.min(d.topBias + d.topAmp, t));
+      t += (Math.random() - 0.5) * d.topAmp * 0.09;
+      t += (d.topBias - t) * 0.035;
+      t = Math.max(
+        d.topBias - d.topAmp * 1.2,
+        Math.min(d.topBias + d.topAmp * 1.2, t),
+      );
       d.top.push(t);
-
       d.bot.shift();
       let b = d.bot[d.bot.length - 1];
-      b += (Math.random() - 0.5) * d.botAmp * 0.08;
-      b += (d.botBias - b) * 0.04;
-      b = Math.max(d.botBias - d.botAmp, Math.min(d.botBias + d.botAmp, b));
+      b += (Math.random() - 0.5) * d.botAmp * 0.09;
+      b += (d.botBias - b) * 0.035;
+      b = Math.max(
+        d.botBias - d.botAmp * 1.2,
+        Math.min(d.botBias + d.botAmp * 1.2, b),
+      );
       d.bot.push(b);
     }
 
@@ -212,15 +232,14 @@ function TensionChart({
     ) {
       const n = d.top.length;
       const mid = cH / 2;
-      // sc = escala visual — más bajo = líneas más separadas visualmente
-      const sc = cH * 1.6;
+      const sc = cH * 1.5;
       const toX = (i: number) => (i / (n - 1)) * cW;
       const toY = (v: number) => mid - v * sc;
       ctx.globalAlpha = alpha;
 
-      // Cuadrícula ultra tenue
+      // Cuadrícula
       ctx.save();
-      ctx.strokeStyle = "rgba(255,255,255,0.022)";
+      ctx.strokeStyle = "rgba(255,255,255,0.020)";
       ctx.lineWidth = 0.5;
       for (let c = 1; c < 6; c++) {
         ctx.beginPath();
@@ -236,9 +255,9 @@ function TensionChart({
       }
       ctx.restore();
 
-      // Línea central visible
+      // Línea central
       ctx.save();
-      ctx.strokeStyle = "rgba(255,255,255,0.20)";
+      ctx.strokeStyle = "rgba(255,255,255,0.18)";
       ctx.lineWidth = 0.6;
       ctx.setLineDash([4, 10]);
       ctx.beginPath();
@@ -248,7 +267,7 @@ function TensionChart({
       ctx.setLineDash([]);
       ctx.restore();
 
-      // Línea TOP — blanco humo, sin fill
+      // TOP — blanco humo, sin fill
       ctx.beginPath();
       ctx.moveTo(toX(0), toY(d.top[0]));
       for (let i = 1; i < n; i++) ctx.lineTo(toX(i), toY(d.top[i]));
@@ -257,7 +276,7 @@ function TensionChart({
       ctx.lineJoin = "round";
       ctx.stroke();
 
-      // Línea BOT — azul petróleo con fill hacia abajo
+      // BOT — azul petróleo con fill
       const gBot = ctx.createLinearGradient(0, mid, 0, cH);
       gBot.addColorStop(0, "rgba(30,80,120,0.00)");
       gBot.addColorStop(1, "rgba(30,80,120,0.30)");
@@ -277,7 +296,7 @@ function TensionChart({
       ctx.lineJoin = "round";
       ctx.stroke();
 
-      // Pulso en top
+      // Pulso
       const pulse = (Math.sin(frameRef.current * 0.07) + 1) / 2;
       const lx = toX(n - 1);
       const ly = toY(d.top[n - 1]);
@@ -940,6 +959,7 @@ export default function LensApp() {
                 <TensionChart
                   topCurrency={topCurrency}
                   bottomCurrency={bottomCurrency}
+                  rates={rates}
                 />
               </div>
 
