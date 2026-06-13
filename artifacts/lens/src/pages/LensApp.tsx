@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 
 const API_URL = "https://lens-api-qu0x.onrender.com/api/prices";
 
-// ─── Catálogo completo ────────────────────────────────────────────────────────
+// ─── Catálogo completo ──ui───────lens───────────────────────────────────────────────
 const CATALOG: Record<string, any[]> = {
   Divisas: [
     { id: "MXN", label: "MXN", flag: "🇲🇽", name: "Peso Mexicano" },
