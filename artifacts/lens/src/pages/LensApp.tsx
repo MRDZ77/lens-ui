@@ -1167,7 +1167,12 @@ export default function LensApp() {
   }
 
   const bottomValue = convert(rawAmount, topAsset.id, bottomAsset.id, rates);
-  const bottomDisplay = rawAmount > 0 ? fmt(bottomValue, bottomAsset.id) : "—";
+  const bottomDisplay =
+    rawAmount > 0
+      ? topAsset.id === bottomAsset.id
+        ? inputValue
+        : fmt(bottomValue, bottomAsset.id)
+      : "—";
 
   function swap() {
     const tmp = topAsset;
